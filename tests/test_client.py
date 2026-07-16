@@ -151,7 +151,15 @@ def test_retry_after_parsing() -> None:
     assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "5"})) == 5.0
     assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "0"})) == 0.0
     assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "soon"})) == 2.0
-    assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "-3"})) == 0.0
+    assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "-3"})) == 2.0
+
+
+def test_retry_after_rejects_non_finite_and_huge_values() -> None:
+    # A header from a misbehaving proxy/CDN must never hang the tool call:
+    # float() accepts "inf"/"nan", and "1e309" overflows to inf.
+    for raw in ("inf", "Infinity", "nan", "1e309"):
+        assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": raw})) == 2.0
+    assert _retry_after_seconds(httpx.Response(429, headers={"Retry-After": "9999"})) == 30.0
 
 
 async def test_account_id_returns_configured_value_without_requests(client: ApiClient) -> None:

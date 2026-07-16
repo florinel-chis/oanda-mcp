@@ -12,10 +12,12 @@ Behaviours every tool relies on:
   ``INSUFFICIENT_MARGIN``) — order tools must inspect it before reading the
   fill.
 * On HTTP 429 the request is retried exactly once, honouring the
-  ``Retry-After`` header (defaulting to 2 seconds when absent or unparseable).
+  ``Retry-After`` header when it is a finite, non-negative number of seconds
+  (capped at 30; defaulting to 2 seconds when absent or unparseable).
 """
 
 import asyncio
+import math
 from typing import Any
 from urllib.parse import quote
 
@@ -25,6 +27,7 @@ from fastmcp.exceptions import ToolError
 from oanda_mcp.config import Settings
 
 _DEFAULT_RETRY_AFTER = 2.0
+_MAX_RETRY_AFTER = 30.0
 _TIMEOUT_SECONDS = 30.0
 
 
@@ -39,14 +42,24 @@ def quote_path_segment(value: str) -> str:
 
 
 def _retry_after_seconds(response: httpx.Response) -> float:
-    """Delay before retrying a rate-limited request, from ``Retry-After``."""
+    """Delay before retrying a rate-limited request, from ``Retry-After``.
+
+    Honoured only when the header is a finite, non-negative number of
+    seconds, capped at :data:`_MAX_RETRY_AFTER` so a hostile or buggy
+    intermediary cannot stall a tool call indefinitely (``float`` accepts
+    ``inf``/``nan``, and huge exponents overflow to ``inf``); anything else
+    falls back to :data:`_DEFAULT_RETRY_AFTER`.
+    """
     raw = response.headers.get("Retry-After")
     if raw is None:
         return _DEFAULT_RETRY_AFTER
     try:
-        return max(float(raw), 0.0)
+        seconds = float(raw)
     except ValueError:
         return _DEFAULT_RETRY_AFTER
+    if not math.isfinite(seconds) or seconds < 0:
+        return _DEFAULT_RETRY_AFTER
+    return min(seconds, _MAX_RETRY_AFTER)
 
 
 def _error_message(response: httpx.Response) -> str:

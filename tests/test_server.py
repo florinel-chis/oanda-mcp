@@ -89,3 +89,25 @@ def test_main_help_exits_zero_without_credentials(monkeypatch, capsys):
         main()
     assert excinfo.value.code == 0
     assert "usage: oanda-mcp" in capsys.readouterr().out
+
+
+def test_loopback_host_detection():
+    from oanda_mcp.server import _is_loopback_host
+
+    for host in ("127.0.0.1", "127.1.2.3", "::1", "localhost", "LocalHost", " 127.0.0.1 "):
+        assert _is_loopback_host(host), host
+    for host in ("0.0.0.0", "192.168.1.5", "10.0.0.1", "::", "example.com", ""):
+        assert not _is_loopback_host(host), host
+
+
+def test_http_refuses_non_loopback_bind_without_allow_remote(monkeypatch, capsys):
+    """The HTTP transport is unauthenticated: whoever can reach the port can
+    act with the configured credentials. A non-loopback bind must therefore
+    be an explicit, flagged decision — and be refused before credentials are
+    even read, so the error cannot depend on the environment."""
+    monkeypatch.delenv("OANDA_API_TOKEN", raising=False)
+    monkeypatch.setattr("sys.argv", ["oanda-mcp", "--transport", "http", "--host", "0.0.0.0"])
+    with pytest.raises(SystemExit) as excinfo:
+        main()
+    assert excinfo.value.code == 2
+    assert "--allow-remote" in capsys.readouterr().err

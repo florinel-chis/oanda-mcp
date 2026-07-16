@@ -84,9 +84,10 @@ The server speaks stdio by default; pass `--transport http --host 127.0.0.1 --po
 streamable HTTP at `/mcp` instead.
 
 > **Warning:** the HTTP endpoint has **no authentication** — anyone who can reach the port can
-> call every registered tool with your `OANDA_API_TOKEN`'s privileges. Bind it to `127.0.0.1`
-> (never `0.0.0.0` on a reachable machine) and put an authenticated reverse proxy in front of it
-> if it must be exposed beyond localhost.
+> call every registered tool with your `OANDA_API_TOKEN`'s privileges. The server therefore
+> **refuses to bind a non-loopback `--host` unless `--allow-remote` is also passed**; only use
+> that flag behind an authenticated reverse proxy or an otherwise-restricted network (such as
+> the Docker port-mapping below).
 
 ### MCP client configuration
 
@@ -135,9 +136,9 @@ docker run -i --rm -e OANDA_API_TOKEN oanda-mcp
 # streamable HTTP at http://127.0.0.1:8000/mcp
 # (-p 127.0.0.1:8000:8000 keeps the unauthenticated endpoint off external interfaces;
 #  --host 0.0.0.0 refers to interfaces inside the container and is required for the
-#  port mapping to work)
+#  port mapping to work, hence --allow-remote — the host-side bind stays loopback-only)
 docker run --rm -p 127.0.0.1:8000:8000 -e OANDA_API_TOKEN \
-  oanda-mcp --transport http --host 0.0.0.0 --port 8000
+  oanda-mcp --transport http --host 0.0.0.0 --port 8000 --allow-remote
 ```
 
 ## Safety

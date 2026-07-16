@@ -13,6 +13,7 @@ raise immediately — the server never starts with a partial tool set.
 
 import argparse
 import importlib
+import ipaddress
 
 from fastmcp import FastMCP
 
@@ -45,6 +46,17 @@ def build_server(settings: Settings) -> FastMCP:
     return mcp
 
 
+def _is_loopback_host(host: str) -> bool:
+    """True when host is a loopback name or address (a safe local-only bind)."""
+    candidate = host.strip()
+    if candidate.lower() == "localhost":
+        return True
+    try:
+        return ipaddress.ip_address(candidate).is_loopback
+    except ValueError:
+        return False
+
+
 def main() -> None:
     """Console-script entry point: parse arguments, then run the server."""
     parser = argparse.ArgumentParser(
@@ -59,8 +71,25 @@ def main() -> None:
     )
     parser.add_argument("--host", default="127.0.0.1", help="bind host for --transport http")
     parser.add_argument("--port", type=int, default=8000, help="bind port for --transport http")
+    parser.add_argument(
+        "--allow-remote",
+        action="store_true",
+        help=(
+            "allow --host to be a non-loopback address; the HTTP transport has "
+            "no authentication of its own, so only combine this with an "
+            "authenticating reverse proxy or an otherwise-restricted network"
+        ),
+    )
     # Parse before touching the environment so --help works without credentials.
     args = parser.parse_args()
+
+    # Refuse an unauthenticated network-exposed bind unless explicitly allowed
+    # — anyone who can reach the port can act with the configured credentials.
+    if args.transport == "http" and not args.allow_remote and not _is_loopback_host(args.host):
+        parser.error(
+            f"refusing to bind the unauthenticated HTTP transport to non-loopback host "
+            f"{args.host!r}; pass --allow-remote if the network really is trusted"
+        )
 
     mcp = build_server(Settings.from_env())
     if args.transport == "http":

@@ -1,6 +1,6 @@
 [project]
 name = "oanda-mcp"
-version = "0.1.0"
+version = "0.2.0"
 description = "MCP server for the Oanda v20 REST API: accounts, market data, and gated trading tools."
 authors = [{ name = "Florinel Chis" }]
 license = "MIT"
